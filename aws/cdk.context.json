@@ -1,0 +1,9 @@
+{
+  "availability-zones:account=825625126603:region=us-west-2": [
+    "us-west-2a",
+    "us-west-2b",
+    "us-west-2c",
+    "us-west-2d"
+  ],
+  "ami:account=825625126603:filters.image-type.0=machine:filters.name.0=Deep Learning AMI GPU PyTorch 2.0.*:filters.state.0=available:region=us-west-2": "ami-0623285b2695c795a"
+}
