@@ -1,5 +1,5 @@
 from datetime import datetime
-import itertools
+import numpy as np
 import tempfile
 import time
 import torch
@@ -17,58 +17,59 @@ class BertModelWithMP(torch.nn.Module):
         super().__init__()
         self.config = config
         self.verbose = verbose
-        self.last_timestamp = {}
-
+        
+        self.devices = []
         self.embeddings = BertEmbeddings(config)
         self.encoders = torch.nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
         self.head = BertOnlyMLMHead(config)
 
-        # total number of modules to parallelize (embeddings + encoders + head)
-        num_modules = len(self.encoders) + 2
-
         # naive device placement logic which evenly distributes modules 
         # across all available devices
-        device = get_device()
+        device_type = get_device()
         device_count = device_count or get_device_count()
-        
-        print("Using device: {}".format(device))
+
+        print("Using device: {}".format(device_type))
         if device_count <= 1:
-            print(f"Only one {device} device is available. Training will be done without Model Parallelism.")
-        elif device_count > get_device_count:
-            print(f"Cannot use {device_count} {device} devices. Only {get_device_count()} devices are available. "
+            print(f"Only one {device_type} device is available. Training will be done without Model Parallelism.")
+        elif device_count > get_device_count():
+            print(f"Cannot use {device_count} {device_type} devices. Only {get_device_count()} devices are available. "
                    "Training will be done using {get_device_count()} devices.")
             device_count = get_device_count()
+
+        modules = [self.embeddings] + [e for e in self.encoders] + [self.head]
+        modules_grouped = np.array_split(modules, device_count)
+
+        for group, device_idx in zip(modules_grouped, range(device_count)):
+            device = torch.device(device_type, device_idx)
+
+            for module in group:
+                self.devices.append(device)
+                module.to(device)
             
+            # add forward and backward hooks to track idle time
+            group[0].register_forward_hook(self.idle_time_hook(device.index))
+            group[-1].register_forward_hook(self.idle_time_hook(device.index, entering=False))
 
-        device_cycle = itertools.cycle(range(device_count))
-        device_indices = sorted([next(device_cycle) for _ in range(num_modules)])
-        devices = [torch.device(device, i) for i in device_indices]
+            group[0].register_full_backward_hook(self.idle_time_hook(device.index, forward=False, entering=False))
+            group[-1].register_full_backward_hook(self.idle_time_hook(device.index, forward=False))
 
-        i = 0
-        self.embedding_device = devices[i]
-        self.embeddings.to(self.embedding_device)
+        # map used to track the last timestamp at which a device was
+        # used during a forward or backward pass
+        self.previous_timestamp = {}
+        self.device_idle_time = {d: (0,0) for d in range(device_count)}
 
-        if self.verbose:
-            self.embeddings.register_forward_hook(self.idle_time_hook(self.embedding_device))
-        i += 1
-
-        self.encoder_devices = []
-        for encoder in self.encoders:
-            device = devices[i]
-            if device != devices[i-1] and self.verbose:
-                encoder.register_forward_hook(self.idle_time_hook(device))
-                encoder.register_full_backward_hook(self.idle_time_hook(devices[i-1], forward=False))
-            self.encoder_devices.append(device)
-            encoder.to(device)
-            i += 1
-        
-        self.head_device = devices[i]
-        self.head.to(self.head_device)
-
-        if self.head_device != self.encoder_devices[-1] and self.verbose:
-            self.head.register_forward_hook(self.forward_hook(self.head_device))
-            self.head.register_full_backward_hook(self.idle_time_hook(self.encoder_devices[-1], forward=False))
-
+    @property
+    def embedding_device(self):
+        return self.devices[0]
+    
+    @property
+    def encoder_devices(self):
+        return self.devices[1:-1]
+    
+    @property
+    def head_device(self):
+        return self.devices[-1]
+    
     def to_pipeline(self, chunks):
         """Convert the model for pipeline parallelism."""
         rpc.init_rpc(
@@ -87,7 +88,6 @@ class BertModelWithMP(torch.nn.Module):
         )
         return Pipe(sequential, chunks=chunks)
 
-
     def forward(self, input_ids: torch.LongTensor):
 
         hidden_states = self.embeddings(input_ids.to(self.embedding_device))
@@ -95,30 +95,36 @@ class BertModelWithMP(torch.nn.Module):
             hidden_states = encoder(hidden_states.to(device))[0]
 
         outputs = self.head(hidden_states.to(self.head_device))
-        if self.verbose:
-            outputs.register_hook(self.idle_time_hook(self.head_device, forward=False))
+        # outputs.register_hook(self.idle_time_hook(self.head_device, forward=False))
         
         return outputs
 
-
     def log(self, message):
-        message = f"{datetime.now()} - {message}"
-        print(message)
+        if self.verbose:
+            message = f"{datetime.now()} - {message}"
+            print(message)
 
-    def idle_time_hook(self, device, forward=True):
+    def idle_time_hook(self, device, forward=True, entering=True):
         """Creates a PyTorch hook which logs the idle time of a device."""
         def hook(*args, **kwargs):
             current_timestamp = time.time()
-            last_timestamp = self.last_timestamp.get(device, None)
+            last_timestamp = self.previous_timestamp.get(device, None)
 
-            if forward:
-                message = f"Running forward pass on device {device}"
-            else:
-                message = f"Running backward pass on device {device}"
+            message = "{} {} pass on device {}".format(
+                "Entering" if entering else "Finished",
+                "forward" if forward else "backward",
+                device
+            )
 
-            if last_timestamp is not None:
-                message += f". Idle time: {(current_timestamp - last_timestamp)*1000:.2f}ms"
+            if entering and last_timestamp is not None:
+                idle_time_ms = (current_timestamp - last_timestamp) * 1000
+                self.device_idle_time[device] = (
+                    self.device_idle_time[device][0] + idle_time_ms,
+                    self.device_idle_time[device][1] + 1
+                )
+                
+                message += f". Idle time: {idle_time_ms:.2f}ms"
 
-            self.last_timestamp[device] = current_timestamp
+            self.previous_timestamp[device] = current_timestamp
             self.log(message)
         return hook

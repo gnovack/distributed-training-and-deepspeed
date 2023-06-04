@@ -1,16 +1,8 @@
-import math
 import torch
 from model.transformer import TransformerBlock
 from transformers.models.opt.modeling_opt import OPTConfig
 
-
-def get_device():
-    if torch.cuda.is_available():
-        return "cuda"
-    elif torch.backends.mps.is_available():
-        return "mps"
-    else:
-        raise ValueError(f"Unsupported device")
+from util import format_size, get_device
 
 
 def get_current_memory_allocation(device):
@@ -22,20 +14,6 @@ def get_current_memory_allocation(device):
         raise ValueError(f"Unsupported device: {device}")
 
 
-def convert_size(size_bytes):
-   """
-   Converts the given size in bytes to a human readable format
-   Reference: https://stackoverflow.com/questions/5194057/better-way-to-convert-file-sizes-in-python
-   """
-   if size_bytes == 0:
-       return "0B"
-   size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-   i = int(math.floor(math.log(size_bytes, 1024)))
-   p = math.pow(1024, i)
-   s = round(size_bytes / p, 2)
-   return "%s %s" % (s, size_name[i])
-
-
 def get_model_memory(model: torch.nn.Module):
     """
     Returns the memory consumed by the parameters of the given model.
@@ -44,6 +22,7 @@ def get_model_memory(model: torch.nn.Module):
     for param in model.parameters():
         total_memory += param.numel() * param.element_size()
     return total_memory
+
 
 def get_optimizer_memory(model: torch.nn.Module, optimizer: torch.optim.Optimizer):
     """
@@ -130,7 +109,7 @@ def get_optimizer_bytes_per_parameter(optimizer: torch.optim.Optimizer):
     return bytes_per_param
 
 
-def transformer_model_memory(
+def project_transformer_memory(
         layers, hidden_size, ffn_dim, num_attention_heads, 
         batch_size, sequence_length, optimizer):
 
@@ -166,7 +145,7 @@ if __name__ == "__main__":
     })
     model = load_transformer(config)
 
-    est_size = convert_size(transformer_model_memory(
+    est_size = format_size(project_transformer_memory(
         1, config.hidden_size, config.ffn_dim, 
         config.num_attention_heads, batch_size, 
         config.max_position_embeddings, torch.optim.Adam(model.parameters()))
@@ -181,8 +160,8 @@ if __name__ == "__main__":
     memory_allocation_with_model = get_current_memory_allocation(device)
     estimated_model_memory = get_model_memory(model)
     
-    print(f"Consumed Model Memory: {convert_size(memory_allocation_with_model)}")
-    print(f"Estimated Model Memory: {convert_size(estimated_model_memory)}")
+    print(f"Consumed Model Memory: {format_size(memory_allocation_with_model)}")
+    print(f"Estimated Model Memory: {format_size(estimated_model_memory)}")
     print(f"Percent difference: {abs(memory_allocation_with_model - estimated_model_memory) / estimated_model_memory * 100:.2f}%")
     print("-" * 80)
 
@@ -196,8 +175,8 @@ if __name__ == "__main__":
 
     memory_allocation_forward_pass = get_current_memory_allocation(device) - memory_allocation_with_model
     estimated_activation_memory = 0
-    print(f"Consumed Activation Memory: {convert_size(memory_allocation_forward_pass)}")
-    print(f"Estimated Activation Memory: {convert_size(activation_counter.activation_bytes)}")
+    print(f"Consumed Activation Memory: {format_size(memory_allocation_forward_pass)}")
+    print(f"Estimated Activation Memory: {format_size(activation_counter.activation_bytes)}")
     print(f"Percent difference: {abs(memory_allocation_forward_pass - activation_counter.activation_bytes) / activation_counter.activation_bytes * 100:.2f}%")
     print("-" * 80)
 
@@ -218,13 +197,13 @@ if __name__ == "__main__":
 
     estimated_optimizer_memory = get_optimizer_memory(model, optimizer)
 
-    print(f"Consumed Optimizer Memory: {convert_size(post_backward_memory)}" )
-    print(f"Estimated Optimizer Memory: {convert_size(estimated_optimizer_memory)}")
+    print(f"Consumed Optimizer Memory: {format_size(post_backward_memory)}" )
+    print(f"Estimated Optimizer Memory: {format_size(estimated_optimizer_memory)}")
     print(f"Percent difference: {abs(post_backward_memory - estimated_optimizer_memory) / estimated_optimizer_memory * 100:.2f}%")
     print("-" * 80)
 
-    print(f"Projected total memory usage: {convert_size(estimated_model_memory + activation_counter.activation_bytes + estimated_optimizer_memory)}")
+    print(f"Projected total memory usage: {format_size(estimated_model_memory + activation_counter.activation_bytes + estimated_optimizer_memory)}")
     
-    print(f"Actual total memory usage: {convert_size(get_current_memory_allocation(device))}")
+    print(f"Actual total memory usage: {format_size(get_current_memory_allocation(device))}")
     print("-" * 80)
 
