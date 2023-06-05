@@ -1,6 +1,5 @@
 import argparse
 import time
-import datasets
 import torch
 import transformers
 from tabulate import tabulate
@@ -8,28 +7,9 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer, DataCollatorForLanguageModeling, BertConfig
-from typing import Optional
 
 from model.bert_mp import BertModelWithMP
-
-
-def load_wikitext(tokenizer, collator):
-
-    def mask_tokens(x):
-        input_ids, labels = collator.torch_mask_tokens(x['input_ids'], special_tokens_mask=x['special_tokens_mask'])
-        return {
-            "input_ids": input_ids,
-            "labels": labels
-        }
-
-    wikitext = datasets.load_dataset("wikitext", "wikitext-2-v1")
-    train_dataset = wikitext["train"]
-    
-    train_dataset = train_dataset.map(lambda x: tokenizer(x["text"], padding='max_length', truncation=True, return_tensors='pt', return_special_tokens_mask=True), batched=True)
-    train_dataset.set_format(type="torch", columns=["input_ids", "special_tokens_mask"])
-    train_dataset = train_dataset.map(mask_tokens, remove_columns=['special_tokens_mask'])
-
-    return train_dataset
+from util import load_wikitext
 
 
 def summarize_idle_time(bert: BertModelWithMP, training_steps: int):
@@ -49,7 +29,7 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--training-steps", type=int, default=100)
-    parser.add_argument("--device-count", type=Optional[int], default=None)
+    parser.add_argument("--device-count", type=int, default=None)
     parser.add_argument("--micro-batch-count", type=int, default=8)
     args = parser.parse_args()
 

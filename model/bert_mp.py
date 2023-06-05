@@ -95,7 +95,6 @@ class BertModelWithMP(torch.nn.Module):
             hidden_states = encoder(hidden_states.to(device))[0]
 
         outputs = self.head(hidden_states.to(self.head_device))
-        # outputs.register_hook(self.idle_time_hook(self.head_device, forward=False))
         
         return outputs
 
@@ -106,6 +105,7 @@ class BertModelWithMP(torch.nn.Module):
 
     def idle_time_hook(self, device, forward=True, entering=True):
         """Creates a PyTorch hook which logs the idle time of a device."""
+        
         def hook(*args, **kwargs):
             current_timestamp = time.time()
             last_timestamp = self.previous_timestamp.get(device, None)

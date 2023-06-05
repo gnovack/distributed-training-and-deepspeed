@@ -1,3 +1,4 @@
+import datasets
 import math
 import torch
 
@@ -32,3 +33,22 @@ def format_size(size_bytes):
    p = math.pow(1024, i)
    s = round(size_bytes / p, 2)
    return "%s %s" % (s, size_name[i])
+
+
+def load_wikitext(tokenizer, collator):
+
+    def mask_tokens(x):
+        input_ids, labels = collator.torch_mask_tokens(x['input_ids'], special_tokens_mask=x['special_tokens_mask'])
+        return {
+            "input_ids": input_ids,
+            "labels": labels
+        }
+
+    wikitext = datasets.load_dataset("wikitext", "wikitext-2-v1")
+    train_dataset = wikitext["train"]
+    
+    train_dataset = train_dataset.map(lambda x: tokenizer(x["text"], padding='max_length', truncation=True, return_tensors='pt', return_special_tokens_mask=True), batched=True)
+    train_dataset.set_format(type="torch", columns=["input_ids", "special_tokens_mask"])
+    train_dataset = train_dataset.map(mask_tokens, remove_columns=['special_tokens_mask'])
+
+    return train_dataset
