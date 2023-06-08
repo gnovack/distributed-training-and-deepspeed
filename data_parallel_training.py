@@ -24,13 +24,15 @@ def create_process_group(rank, world_size):
         rank=rank
     )
 
-def train(rank, world_size, batch_size, training_steps, bucket_size):
+def train(rank, world_size, batch_size, training_steps, bucket_size, model):
     transformers.logging.set_verbosity_warning()
 
     create_process_group(rank, world_size)
 
-    model = BertForMaskedLM.from_pretrained("bert-base-cased").to(rank)
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+    model_name = "bert-large-cased" if model == "large" else "bert-base-cased"
+
+    model = BertForMaskedLM.from_pretrained(model_name).to(rank)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     collator = DataCollatorForLanguageModeling(tokenizer)
     optimizer = AdamW(model.parameters(), lr=5e-5)
 
@@ -86,13 +88,14 @@ if __name__ == "__main__":
     parser.add_argument("--training-steps", type=int, default=100)
     parser.add_argument("--device-count", type=int, default=None)
     parser.add_argument("--bucket-size", type=int, default=25)
+    parser.add_argument("--model", type=str, choices=["base", "large"], default="base")
     args = parser.parse_args()
 
     device_count = args.device_count or get_device_count()
 
     mp.spawn(
         train, 
-        args=(device_count, args.batch_size, args.training_steps, args.bucket_size), 
+        args=(device_count, args.batch_size, args.training_steps, args.bucket_size, args.model), 
         nprocs=device_count, 
         join=True
     )
