@@ -35,7 +35,7 @@ def format_size(size_bytes):
    return "%s %s" % (s, size_name[i])
 
 
-def load_wikitext(tokenizer, collator):
+def load_wikitext(tokenizer, collator, max_length=None):
 
     def mask_tokens(x):
         input_ids, labels = collator.torch_mask_tokens(x['input_ids'], special_tokens_mask=x['special_tokens_mask'])
@@ -47,8 +47,14 @@ def load_wikitext(tokenizer, collator):
     wikitext = datasets.load_dataset("wikitext", "wikitext-2-v1")
     train_dataset = wikitext["train"]
     
-    train_dataset = train_dataset.map(lambda x: tokenizer(x["text"], padding='max_length', truncation=True, return_tensors='pt', return_special_tokens_mask=True), batched=True)
+    train_dataset = train_dataset.map(lambda x: tokenizer(x["text"], max_length=max_length, padding='max_length', truncation=True, return_tensors='pt', return_special_tokens_mask=True), batched=True)
     train_dataset.set_format(type="torch", columns=["input_ids", "special_tokens_mask"])
-    train_dataset = train_dataset.map(mask_tokens, remove_columns=['special_tokens_mask'])
+    if collator.mlm:
+        train_dataset = train_dataset.map(mask_tokens, remove_columns=['special_tokens_mask'])
+    else:
+        train_dataset = train_dataset.map(lambda x: {
+            "input_ids": x["input_ids"],
+            "labels": x["input_ids"]
+        })
 
     return train_dataset
