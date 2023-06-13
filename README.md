@@ -1,1 +1,1 @@
-# Distrubted Training
+# Distributed Training
