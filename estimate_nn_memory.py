@@ -20,12 +20,19 @@ class ActivationCounter:
     def add_activations(self, tensor):
         self.activation_bytes += tensor.numel() * tensor.element_size()
 
+    def add_activation_bytes(self, bytes):
+        self.activation_bytes += bytes
+
 
 def activation_counter_hook(counter: ActivationCounter):
     """Returns a hook that counts the number of activations."""
 
     def hook(self, _, output):
-        counter.add_activations(output.data)
+        if self.__class__.__name__ == "Dropout":
+            # for dropout layers, we only need to store the mask
+            counter.add_activation_bytes(output.data.numel())
+        else:
+            counter.add_activations(output.data)
 
     return hook
 
