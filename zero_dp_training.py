@@ -9,19 +9,19 @@ from deepspeed.runtime.utils import memory_status
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-from transformers import BloomForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling
+from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling
 
 from util import load_wikitext
 
 
-def train(batch_size, training_steps, stage, *args):
+def train(model_name, batch_size, training_steps, stage, *args):
     transformers.logging.set_verbosity_warning()
     rank = int(os.getenv("LOCAL_RANK", "0"))
     world_size = int(os.getenv("WORLD_SIZE", "1"))
     
     device = torch.device("cuda", rank)
 
-    model = BloomForCausalLM.from_pretrained("bigscience/bloom-560m")
+    model = AutoModelForCausalLM.from_pretrained(model_name)
 
     ds_config = {
         "train_micro_batch_size_per_gpu": batch_size,
@@ -56,7 +56,7 @@ def train(batch_size, training_steps, stage, *args):
           f"betas={optimizer_state['betas']}; eps={optimizer_state['eps']}; "
           f"parameter count={sum([torch.numel(p) for p in optimizer_state['params']]):,}")
     
-    tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-560m")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
     train_dataset = load_wikitext(tokenizer, collator, max_length=512).select(range(batch_size * training_steps))
     train_dataloader = DataLoader(
@@ -114,9 +114,10 @@ def train(batch_size, training_steps, stage, *args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", type=str, default="bigscience/bloom-560m")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--training-steps", type=int, default=100)
     parser.add_argument("--stage", type=int, default=0)
     args, extra_args = parser.parse_known_args()
     
-    train(args.batch_size, args.training_steps, args.stage, *extra_args)
+    train(args.model_name, args.batch_size, args.training_steps, args.stage, *extra_args)
