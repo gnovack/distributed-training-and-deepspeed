@@ -114,7 +114,7 @@ def train(model_name, batch_size, training_steps, stage, *args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name", type=str, default="bigscience/bloom-560m")
+    parser.add_argument("--model-name", type=str, default="bigscience/bloom-560m")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--training-steps", type=int, default=100)
     parser.add_argument("--stage", type=int, default=0)
