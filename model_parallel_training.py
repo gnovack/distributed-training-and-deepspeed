@@ -27,10 +27,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--pipeline", action="store_true")
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--training-steps", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--training-steps", type=int, default=250)
     parser.add_argument("--device-count", type=int, default=None)
-    parser.add_argument("--micro-batch-count", type=int, default=8)
+    parser.add_argument("--micro-batch-count", type=int, default=4)
     args = parser.parse_args()
 
     config = BertConfig.from_pretrained("bert-base-cased")
@@ -86,6 +86,3 @@ if __name__ == "__main__":
     
     print("\nAverage Idle Time per Device:")
     summarize_idle_time(bert, args.training_steps)
-    
-    
-
