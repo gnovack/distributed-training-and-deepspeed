@@ -42,30 +42,3 @@ wait
 update_ssh_config 1
 update_ssh_config 2
 update_ssh_config 3
-
-
-# copy SSH keys to first worker node
-# scp ./multi-node-training-keys/id_rsa.pub worker-1:/home/ubuntu/.ssh/id_rsa.pub
-# scp ./multi-node-training-keys/id_rsa worker-1:/home/ubuntu/.ssh/id_rsa
-
-# # copy SSH keys to second worker node
-# scp ./multi-node-training-keys/id_rsa.pub worker-2:/home/ubuntu/.ssh/id_rsa.pub
-# scp ./multi-node-training-keys/id_rsa worker-2:/home/ubuntu/.ssh/id_rsa
-
-# # copy SSH keys to third worker node
-# scp ./multi-node-training-keys/id_rsa.pub worker-3:/home/ubuntu/.ssh/id_rsa.pub
-# scp ./multi-node-training-keys/id_rsa worker-3:/home/ubuntu/.ssh/id_rsa
-
-# # add SSH keys to authorized_keys on second worker node
-# ssh worker-1 'cat /home/ubuntu/.ssh/id_rsa.pub >> /home/ubuntu/.ssh/authorized_keys'
-# ssh worker-2 'cat /home/ubuntu/.ssh/id_rsa.pub >> /home/ubuntu/.ssh/authorized_keys'
-# ssh worker-3 'cat /home/ubuntu/.ssh/id_rsa.pub >> /home/ubuntu/.ssh/authorized_keys'
-
-# # install requirements on worker nodes
-# ssh worker-1 'rm -rf distributed-training-and-deepspeed && git clone https://github.com/gnovack/distributed-training-and-deepspeed.git && pip install -r distributed-training-and-deepspeed/requirements.txt' &
-# ssh worker-2 'rm -rf distributed-training-and-deepspeed && git clone https://github.com/gnovack/distributed-training-and-deepspeed.git && pip install -r distributed-training-and-deepspeed/requirements.txt' &
-# ssh worker-3 'rm -rf distributed-training-and-deepspeed && git clone https://github.com/gnovack/distributed-training-and-deepspeed.git && pip install -r distributed-training-and-deepspeed/requirements.txt' &
-# wait
-
-# copy hostfile to first worker node
-# scp config/hostfile worker-1:/home/ubuntu/distributed-training-and-deepspeed/hostfile
